@@ -66,6 +66,7 @@
 		"CF_HTTP_STATUS_GROUP": false,
 		"METRICS_PATH": "/metrics",
 		"DISABLE_UI": false,
-		"DISABLE_CONFIG_API": false
+		"DISABLE_CONFIG_API": false,
+		"CF_ZONES": "a874d8692183ca8f12debf3a747c2328,b2967ea2d71faa80024f143926a76000"
 	}
 }
