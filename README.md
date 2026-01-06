@@ -21,7 +21,7 @@ Export Cloudflare metrics to Prometheus. Built on Cloudflare Workers with Durabl
 
 ### One-Click Deploy
 
-Click the deploy button above. Configure `CLOUDFLARE_API_TOKEN` as a secret after deployment.
+Click the deploy button above. Configure `CLOUDFLARE_API_TOKEN` as a secret after deployment. Configure `BASIC_AUTH_USER` and `BASIC_AUTH_PASSWORD` to protect the exporter with HTTP Basic Auth.
 
 ### Manual Deployment
 
@@ -63,10 +63,12 @@ Set in `wrangler.jsonc` or via `wrangler secret put`:
 | `CF_ZONES` | - | Comma-separated zone IDs to include (default: all) |
 | `CF_FREE_TIER_ACCOUNTS` | - | Comma-separated account IDs using free tier (skips paid-tier metrics) |
 | `METRICS_PATH` | /metrics | Custom path for metrics endpoint |
+| `BASIC_AUTH_USER` | - | Username for basic auth (secret, default: no auth, requires `BASIC_AUTH_PASSWORD`) |
+| `BASIC_AUTH_PASSWORD` | - | Password for basic auth (secret, default: no auth, requires `BASIC_AUTH_USER`) |
 
 ### Creating an API Token
 
-**Quick setup**: [Create token with pre-filled permissions](https://dash.cloudflare.com/profile/api-tokens?permissionGroupKeys=%5B%7B%22key%22%3A%22zone_analytics%22%2C%22type%22%3A%22read%22%7D%2C%7B%22key%22%3A%22account_analytics%22%2C%22type%22%3A%22read%22%7D%2C%7B%22key%22%3A%22workers_scripts%22%2C%22type%22%3A%22read%22%7D%2C%7B%22key%22%3A%22ssl_certificates%22%2C%22type%22%3A%22read%22%7D%2C%7B%22key%22%3A%22firewall_services%22%2C%22type%22%3A%22read%22%7D%2C%7B%22key%22%3A%22load_balancers%22%2C%22type%22%3A%22read%22%7D%2C%7B%22key%22%3A%22logpush%22%2C%22type%22%3A%22read%22%7D%5D&name=Cloudflare%20Prometheus%20Exporter)
+**Quick setup**: [Create token with pre-filled permissions](https://dash.cloudflare.com/profile/api-tokens?permissionGroupKeys=%5B%7B%22key%22%3A%22analytics%22%2C%22type%22%3A%22read%22%7D%2C%7B%22key%22%3A%22account_analytics%22%2C%22type%22%3A%22read%22%7D%2C%7B%22key%22%3A%22workers_scripts%22%2C%22type%22%3A%22read%22%7D%2C%7B%22key%22%3A%22ssl_and_certificates%22%2C%22type%22%3A%22read%22%7D%2C%7B%22key%22%3A%22firewall_services%22%2C%22type%22%3A%22read%22%7D%2C%7B%22key%22%3A%22load_balancers%22%2C%22type%22%3A%22read%22%7D%2C%7B%22key%22%3A%22account_logs%22%2C%22type%22%3A%22read%22%7D%2C%7B%22key%22%3A%22magic_transit%22%2C%22type%22%3A%22read%22%7D%5D&name=Cloudflare%20Prometheus%20Exporter)
 
 **Manual setup**:
 
@@ -78,7 +80,7 @@ Set in `wrangler.jsonc` or via `wrangler secret put`:
 | Zone > SSL and Certificates | Read | Optional |
 | Zone > Firewall Services | Read | Optional |
 | Zone > Load Balancers | Read | Optional |
-| Account > Logpush | Read | Optional |
+| Account > Logs | Read | Optional |
 | Account > Magic Transit | Read | Optional |
 
 ## Endpoints
@@ -101,6 +103,29 @@ scrape_configs:
   - job_name: 'cloudflare'
     scrape_interval: 60s
     scrape_timeout: 30s
+    static_configs:
+      - targets: ['your-worker.your-subdomain.workers.dev']
+```
+
+### With Basic Auth
+
+Set up basic auth to protect all endpoints:
+
+```bash
+wrangler secret put BASIC_AUTH_USER
+wrangler secret put BASIC_AUTH_PASSWORD
+```
+
+Then configure Prometheus:
+
+```yaml
+scrape_configs:
+  - job_name: 'cloudflare'
+    scrape_interval: 60s
+    scrape_timeout: 30s
+    basic_auth:
+      username: 'your-username'
+      password: 'your-password'
     static_configs:
       - targets: ['your-worker.your-subdomain.workers.dev']
 ```
@@ -164,35 +189,35 @@ curl -X DELETE https://your-worker.workers.dev/config
 |--------|------|--------|
 | `cloudflare_zone_requests_total` | counter | zone |
 | `cloudflare_zone_requests_cached` | gauge | zone |
-| `cloudflare_zone_requests_ssl_encrypted` | counter | zone |
-| `cloudflare_zone_requests_content_type` | counter | zone, content_type |
-| `cloudflare_zone_requests_country` | counter | zone, country, region |
-| `cloudflare_zone_requests_status` | counter | zone, status |
-| `cloudflare_zone_requests_browser_map_page_views_count` | counter | zone, family |
-| `cloudflare_zone_requests_ip_class` | counter | zone, ip_class |
-| `cloudflare_zone_requests_ssl_protocol` | counter | zone, ssl_protocol |
-| `cloudflare_zone_requests_http_version` | counter | zone, http_version |
-| `cloudflare_zone_requests_origin_status_country_host` | counter | zone, origin_status, country, host |
-| `cloudflare_zone_requests_status_country_host` | counter | zone, edge_status, country, host |
-| `cloudflare_zone_request_method_count` | counter | zone, method |
+| `cloudflare_zone_requests_ssl_encrypted_total` | counter | zone |
+| `cloudflare_zone_requests_content_type_total` | counter | zone, content_type |
+| `cloudflare_zone_requests_country_total` | counter | zone, country |
+| `cloudflare_zone_requests_status_total` | counter | zone, status |
+| `cloudflare_zone_requests_browser_map_page_views_total` | counter | zone, family |
+| `cloudflare_zone_requests_ip_class_total` | counter | zone, ip_class |
+| `cloudflare_zone_requests_ssl_protocol_total` | counter | zone, ssl_protocol |
+| `cloudflare_zone_requests_http_version_total` | counter | zone, http_version |
+| `cloudflare_zone_requests_origin_status_country_host_total` | counter | zone, origin_status, country, host |
+| `cloudflare_zone_requests_status_country_host_total` | counter | zone, edge_status, country, host |
+| `cloudflare_zone_requests_by_method_total` | counter | zone, method |
 
 ### Zone Bandwidth Metrics
 
 | Metric | Type | Labels |
 |--------|------|--------|
 | `cloudflare_zone_bandwidth_total` | counter | zone |
-| `cloudflare_zone_bandwidth_cached` | counter | zone |
-| `cloudflare_zone_bandwidth_ssl_encrypted` | counter | zone |
-| `cloudflare_zone_bandwidth_content_type` | counter | zone, content_type |
-| `cloudflare_zone_bandwidth_country` | counter | zone, country |
+| `cloudflare_zone_bandwidth_cached_total` | counter | zone |
+| `cloudflare_zone_bandwidth_ssl_encrypted_total` | counter | zone |
+| `cloudflare_zone_bandwidth_content_type_total` | counter | zone, content_type |
+| `cloudflare_zone_bandwidth_country_total` | counter | zone, country |
 
 ### Zone Threat Metrics
 
 | Metric | Type | Labels |
 |--------|------|--------|
 | `cloudflare_zone_threats_total` | counter | zone |
-| `cloudflare_zone_threats_country` | counter | zone, country |
-| `cloudflare_zone_threats_type` | counter | zone, type |
+| `cloudflare_zone_threats_country_total` | counter | zone, country |
+| `cloudflare_zone_threats_type_total` | counter | zone, type |
 
 ### Zone Page/Unique Metrics
 
@@ -205,39 +230,39 @@ curl -X DELETE https://your-worker.workers.dev/config
 
 | Metric | Type | Labels |
 |--------|------|--------|
-| `cloudflare_zone_colocation_visits` | counter | zone, colo, host |
-| `cloudflare_zone_colocation_edge_response_bytes` | counter | zone, colo, host |
+| `cloudflare_zone_colocation_visits_total` | counter | zone, colo, host |
+| `cloudflare_zone_colocation_edge_response_bytes_total` | counter | zone, colo, host |
 | `cloudflare_zone_colocation_requests_total` | counter | zone, colo, host |
-| `cloudflare_zone_colocation_visits_error` | counter | zone, colo, host, status |
-| `cloudflare_zone_colocation_edge_response_bytes_error` | counter | zone, colo, host, status |
-| `cloudflare_zone_colocation_requests_total_error` | counter | zone, colo, host, status |
+| `cloudflare_zone_colocation_error_visits_total` | counter | zone, colo, host, status |
+| `cloudflare_zone_colocation_error_edge_response_bytes_total` | counter | zone, colo, host, status |
+| `cloudflare_zone_colocation_error_requests_total` | counter | zone, colo, host, status |
 
 ### Firewall Metrics
 
 | Metric | Type | Labels |
 |--------|------|--------|
-| `cloudflare_zone_firewall_events_count` | counter | zone, action, source, rule, host, country |
-| `cloudflare_zone_firewall_bots_detected` | counter | zone, bot_score, detection_ids |
+| `cloudflare_zone_firewall_events_total` | counter | zone, action, source, rule, host, country |
+| `cloudflare_zone_firewall_bots_detected_total` | counter | zone, bot_score, detection_source |
 
 ### Health Check Metrics
 
 | Metric | Type | Labels |
 |--------|------|--------|
-| `cloudflare_zone_health_check_events_origin_count` | counter | zone, health_status, origin_ip, region, fqdn, failure_reason |
+| `cloudflare_zone_health_check_events_origin_total` | counter | zone, health_status, origin_ip, region, fqdn, failure_reason |
 | `cloudflare_zone_health_check_events_avg` | gauge | zone |
-| `cloudflare_zone_health_check_rtt_ms` | gauge | zone, origin_ip, fqdn |
-| `cloudflare_zone_health_check_ttfb_ms` | gauge | zone, origin_ip, fqdn |
-| `cloudflare_zone_health_check_tcp_conn_ms` | gauge | zone, origin_ip, fqdn |
-| `cloudflare_zone_health_check_tls_handshake_ms` | gauge | zone, origin_ip, fqdn |
+| `cloudflare_zone_health_check_rtt_seconds` | gauge | zone, origin_ip, fqdn |
+| `cloudflare_zone_health_check_ttfb_seconds` | gauge | zone, origin_ip, fqdn |
+| `cloudflare_zone_health_check_tcp_connection_seconds` | gauge | zone, origin_ip, fqdn |
+| `cloudflare_zone_health_check_tls_handshake_seconds` | gauge | zone, origin_ip, fqdn |
 
 ### Worker Metrics
 
 | Metric | Type | Labels |
 |--------|------|--------|
-| `cloudflare_worker_requests_count` | counter | script_name |
-| `cloudflare_worker_errors_count` | counter | script_name |
-| `cloudflare_worker_cpu_time` | gauge | script_name, quantile |
-| `cloudflare_worker_duration` | gauge | script_name, quantile |
+| `cloudflare_worker_requests_total` | counter | script_name |
+| `cloudflare_worker_errors_total` | counter | script_name |
+| `cloudflare_worker_cpu_time_seconds` | gauge | script_name, quantile |
+| `cloudflare_worker_duration_seconds` | gauge | script_name, quantile |
 
 ### Load Balancer Metrics
 
@@ -245,7 +270,7 @@ curl -X DELETE https://your-worker.workers.dev/config
 |--------|------|--------|
 | `cloudflare_zone_pool_health_status` | gauge | zone, lb_name, pool_name |
 | `cloudflare_zone_pool_requests_total` | counter | zone, lb_name, pool_name, origin_name |
-| `cloudflare_zone_lb_pool_rtt_ms` | gauge | zone, lb_name, pool_name |
+| `cloudflare_zone_lb_pool_rtt_seconds` | gauge | zone, lb_name, pool_name |
 | `cloudflare_zone_lb_steering_policy_info` | gauge | zone, lb_name, policy |
 | `cloudflare_zone_lb_origins_selected_count` | gauge | zone, lb_name, pool_name |
 | `cloudflare_zone_lb_origin_weight` | gauge | zone, lb_name, pool_name, origin_name |
@@ -254,31 +279,31 @@ curl -X DELETE https://your-worker.workers.dev/config
 
 | Metric | Type | Labels |
 |--------|------|--------|
-| `cloudflare_logpush_failed_jobs_account_count` | counter | account, job_id, destination_type |
-| `cloudflare_logpush_failed_jobs_zone_count` | counter | zone, job_id, destination_type |
+| `cloudflare_logpush_failed_jobs_account_total` | counter | account, job_id, status, destination_type |
+| `cloudflare_logpush_failed_jobs_zone_total` | counter | zone, job_id, destination_type |
 
 ### Error Rate Metrics
 
 | Metric | Type | Labels |
 |--------|------|--------|
-| `cloudflare_zone_customer_error_4xx_rate` | counter | zone, status, country, host |
-| `cloudflare_zone_customer_error_5xx_rate` | counter | zone, status, country, host |
-| `cloudflare_zone_edge_error_rate` | gauge | zone, status |
-| `cloudflare_zone_origin_error_rate` | gauge | zone, status |
-| `cloudflare_zone_origin_response_duration_ms` | gauge | zone, status, country, host |
+| `cloudflare_zone_customer_error_4xx_total` | counter | zone, status, country, host |
+| `cloudflare_zone_customer_error_5xx_total` | counter | zone, status, country, host |
+| `cloudflare_zone_edge_error_rate` | gauge | zone |
+| `cloudflare_zone_origin_error_rate` | gauge | zone |
+| `cloudflare_zone_origin_response_duration_seconds` | gauge | zone, status, country, host |
 
 ### Cache Metrics
 
 | Metric | Type | Labels |
 |--------|------|--------|
 | `cloudflare_zone_cache_hit_ratio` | gauge | zone |
-| `cloudflare_zone_cache_miss_origin_duration_ms` | gauge | zone, country, host |
+| `cloudflare_zone_cache_miss_origin_duration_seconds` | gauge | zone, country, host |
 
 ### Bot Metrics
 
 | Metric | Type | Labels |
 |--------|------|--------|
-| `cloudflare_zone_bot_request_by_country` | counter | zone, country |
+| `cloudflare_zone_bot_requests_by_country_total` | counter | zone, country |
 
 ### Magic Transit Metrics
 
@@ -301,8 +326,8 @@ curl -X DELETE https://your-worker.workers.dev/config
 |--------|------|--------|
 | `cloudflare_exporter_up` | gauge | - |
 | `cloudflare_exporter_errors_total` | counter | account_id, error_code |
-| `cloudflare_accounts_total` | gauge | - |
-| `cloudflare_zones_total` | gauge | - |
+| `cloudflare_accounts` | gauge | - |
+| `cloudflare_zones` | gauge | - |
 | `cloudflare_zones_filtered` | gauge | - |
 | `cloudflare_zones_processed` | gauge | - |
 | `cloudflare_zones_skipped_free_tier` | gauge | - |

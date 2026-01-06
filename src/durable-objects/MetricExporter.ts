@@ -354,9 +354,15 @@ export class MetricExporter extends DurableObject<Env> {
 	 */
 	private async scheduleNextAlarm(config: ResolvedConfig): Promise<void> {
 		const intervalMs = config.metricRefreshIntervalSeconds * 1000;
-		// Jitter: 1-5s fixed (tighter clustering for time range alignment)
+
+		// Get the start of the current minute interval
+		const now = Date.now();
+		const startOfInterval = Math.floor(now / intervalMs) * intervalMs;
+
+		// Add the jitter (1-5s) to the NEXT interval start
+		// This ensures we always fire at ":01-05" of every interval
 		const jitter = 1000 + Math.random() * 4000;
-		const nextAlarm = Date.now() + intervalMs + jitter;
+		const nextAlarm = startOfInterval + intervalMs + jitter;
 
 		await this.ctx.storage.setAlarm(nextAlarm);
 	}
@@ -497,10 +503,10 @@ export class MetricExporter extends DurableObject<Env> {
 
 	/**
 	 * Update counter state with a new raw value.
-	 * Handles counter resets by detecting decreases.
+	 * Cloudflare API returns window-based totals, so we simply add them.
 	 *
 	 * @param existing Existing counter state or undefined for new counter.
-	 * @param rawValue New raw counter value from API.
+	 * @param rawValue Window total from API to add to accumulated value.
 	 * @returns Updated counter state with accumulated value.
 	 */
 	private updateCounter(
@@ -508,13 +514,8 @@ export class MetricExporter extends DurableObject<Env> {
 		rawValue: number,
 	): CounterState {
 		if (!existing) {
-			return { prev: rawValue, accumulated: rawValue };
+			return { accumulated: rawValue };
 		}
-		const delta =
-			rawValue < existing.prev ? rawValue : rawValue - existing.prev;
-		return {
-			prev: rawValue,
-			accumulated: existing.accumulated + delta,
-		};
+		return { accumulated: existing.accumulated + rawValue };
 	}
 }
