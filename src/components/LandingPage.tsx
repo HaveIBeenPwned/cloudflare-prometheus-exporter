@@ -439,6 +439,23 @@ export const LandingPage: FC<Props> = ({ config }) => {
 						>
 							—
 						</p>
+						<div class="mt-4 pt-4 border-t border-gray-100 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+							<div>
+								<h4 class="font-semibold text-gray-900">Durable Object Data</h4>
+								<p class="text-sm text-gray-500">
+									Clear cached coordinator and exporter state to force a clean
+									rebuild on the next scrape.
+								</p>
+							</div>
+							<button
+								type="button"
+								id="reset-data-btn"
+								onclick="resetDurableObjectData()"
+								class="inline-flex items-center justify-center px-4 py-2 text-sm font-medium text-red-700 border border-red-200 rounded-lg bg-red-50 hover:bg-red-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+							>
+								Reset Data
+							</button>
+						</div>
 					</div>
 					{/* Runtime Configuration Card */}
 					{!config.disableConfigApi && (

@@ -190,6 +190,34 @@ export const LandingPageScript: FC<Props> = ({
 				updateSaveButton();
 			}
 
+			async function resetDurableObjectData() {
+				if (!confirm('Delete all durable object data and cached metrics?')) return;
+
+				const btn = document.getElementById('reset-data-btn');
+				const previousText = btn.textContent;
+				btn.disabled = true;
+				btn.textContent = 'Resetting...';
+
+				try {
+					const res = await fetch('/reset-data', { method: 'POST' });
+					const data = await res.json().catch(() => null);
+					if (!res.ok) {
+						throw new Error(data?.error || 'Failed to reset durable object data');
+					}
+
+					showToast(
+						'Durable object data reset (' + data.accountCoordinators + ' coordinators, ' + data.metricExporters + ' exporters)',
+						'success'
+					);
+					fetchMetrics();
+				} catch (e) {
+					showToast('Reset failed: ' + e.message, 'error');
+				} finally {
+					btn.disabled = false;
+					btn.textContent = previousText;
+				}
+			}
+
 			// Update single field UI
 			function updateFieldUI(key) {
 				const el = document.getElementById('cfg-' + key);

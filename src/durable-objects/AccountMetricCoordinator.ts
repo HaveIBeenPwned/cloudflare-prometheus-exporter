@@ -155,6 +155,45 @@ export class AccountMetricCoordinator extends DurableObject<Env> {
 		);
 	}
 
+	/**
+	 * Deletes coordinator state and all currently tracked exporter Durable Objects.
+	 *
+	 * @returns Count of exporter objects that were reset.
+	 */
+	async resetData(): Promise<{ metricExporters: number }> {
+		const state = this.state;
+		let exporterIds: string[] = [];
+
+		if (state !== undefined) {
+			const config = await getConfig(this.env);
+			const cfFreeTierSet = parseCommaSeparated(config.cfFreeTierAccounts);
+			const isFreeTierAccount = cfFreeTierSet.has(state.accountId);
+
+			exporterIds = [
+				...getActiveAccountQueries(config, isFreeTierAccount).map(
+					(query) => `account:${state.accountId}:${query}`,
+				),
+				...(isFreeTierAccount
+					? []
+					: state.zones.flatMap((zone) =>
+							ZONE_SCOPED_QUERIES.map((query) => `zone:${zone.id}:${query}`),
+						)),
+			];
+
+			await Promise.all(
+				exporterIds.map((id) =>
+					this.env.MetricExporter.getByName(id).resetData(),
+				),
+			);
+		}
+
+		await this.ctx.storage.deleteAlarm();
+		await this.ctx.storage.deleteAll();
+		this.state = undefined;
+
+		return { metricExporters: exporterIds.length };
+	}
+
 	override async alarm(): Promise<void> {
 		const config = await getConfig(this.env);
 		const logger = this.createLogger(config);

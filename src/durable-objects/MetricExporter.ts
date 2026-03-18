@@ -273,6 +273,15 @@ export class MetricExporter extends DurableObject<Env> {
 	}
 
 	/**
+	 * Deletes all persisted exporter state and clears any scheduled alarm.
+	 */
+	async resetData(): Promise<void> {
+		await this.ctx.storage.deleteAlarm();
+		await this.ctx.storage.deleteAll();
+		this.state = undefined;
+	}
+
+	/**
 	 * Refresh metrics from Cloudflare API using the provided time range.
 	 * Handles account-scoped and zone-scoped queries, processes counters, and schedules next alarm.
 	 *

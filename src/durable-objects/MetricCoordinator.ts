@@ -75,6 +75,38 @@ export class MetricCoordinator extends DurableObject<Env> {
 	}
 
 	/**
+	 * Deletes coordinator state and all currently tracked account/exporter Durable Objects.
+	 *
+	 * @returns Counts of account coordinators and exporters that were reset.
+	 */
+	async resetData(): Promise<{
+		accountCoordinators: number;
+		metricExporters: number;
+	}> {
+		const accounts = this.state?.accounts ?? [];
+
+		const resetResults = await Promise.all(
+			accounts.map((account) =>
+				this.env.AccountMetricCoordinator.getByName(
+					`account:${account.id}`,
+				).resetData(),
+			),
+		);
+
+		await this.ctx.storage.deleteAlarm();
+		await this.ctx.storage.deleteAll();
+		this.state = undefined;
+
+		return {
+			accountCoordinators: accounts.length,
+			metricExporters: resetResults.reduce(
+				(total, result) => total + result.metricExporters,
+				0,
+			),
+		};
+	}
+
+	/**
 	 * Gets coordinator state.
 	 *
 	 * @returns Current coordinator state.

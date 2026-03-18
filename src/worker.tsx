@@ -17,7 +17,7 @@ import {
 	setConfigKey,
 } from "./lib/runtime-config";
 
-export { MetricCoordinator, AccountMetricCoordinator, MetricExporter };
+export { AccountMetricCoordinator, MetricCoordinator, MetricExporter };
 
 type Variables = { config: AppConfig };
 
@@ -158,6 +158,12 @@ app.delete("/config/:key", async (c) => {
 app.delete("/config", async (c) => {
 	const config = await resetAllConfig(c.env);
 	return c.json(config);
+});
+
+app.post("/reset-data", async (c) => {
+	const coordinator = c.env.MetricCoordinator.getByName("metric-coordinator");
+	const result = await coordinator.resetData();
+	return c.json({ success: true, ...result });
 });
 
 app.notFound((c) => c.text("Not Found", 404));
