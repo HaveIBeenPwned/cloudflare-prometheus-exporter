@@ -261,10 +261,10 @@ curl -X DELETE https://your-worker.workers.dev/config
 
 | Metric | Type | Labels |
 |--------|------|--------|
-| `cloudflare_worker_requests_total` | counter | script_name |
-| `cloudflare_worker_errors_total` | counter | script_name |
-| `cloudflare_worker_cpu_time_seconds` | gauge | script_name, quantile |
-| `cloudflare_worker_duration_seconds` | gauge | script_name, quantile |
+| `cloudflare_worker_requests_total` | counter | script_name, account, status |
+| `cloudflare_worker_errors_total` | counter | script_name, account, status |
+| `cloudflare_worker_cpu_time_seconds` | gauge | script_name, account, status, quantile |
+| `cloudflare_worker_duration_seconds` | gauge | script_name, account, status, quantile |
 
 ### Load Balancer Metrics
 

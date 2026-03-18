@@ -10,7 +10,7 @@ import {
 	type Logger,
 	type LoggerConfig,
 } from "../lib/logger";
-import type { MetricDefinition } from "../lib/metrics";
+import type { MetricDefinition, MetricValue } from "../lib/metrics";
 import type {
 	Account,
 	LoadBalancerPool,
@@ -110,6 +110,45 @@ function classifyTunnelState(avgScore: number): {
  */
 function normalizeAccountName(name: string): string {
 	return name.toLowerCase().replace(/ /g, "-");
+}
+
+function workerMetricSignature(labels: Record<string, string>): string {
+	return Object.entries(labels)
+		.sort(([a], [b]) => a.localeCompare(b))
+		.map(([key, value]) => `${key}\x00${value}`)
+		.join("\x01");
+}
+
+function aggregateWorkerCounterValue(
+	valuesBySignature: Map<string, MetricValue>,
+	labels: Record<string, string>,
+	value: number,
+): void {
+	const signature = workerMetricSignature(labels);
+	const existing = valuesBySignature.get(signature);
+
+	if (existing) {
+		existing.value += value;
+		return;
+	}
+
+	valuesBySignature.set(signature, { labels, value });
+}
+
+function aggregateWorkerGaugeValue(
+	valuesBySignature: Map<string, MetricValue>,
+	labels: Record<string, string>,
+	value: number,
+): void {
+	const signature = workerMetricSignature(labels);
+	const existing = valuesBySignature.get(signature);
+
+	if (existing) {
+		existing.value = Math.max(existing.value, value);
+		return;
+	}
+
+	valuesBySignature.set(signature, { labels, value });
 }
 
 // Worker metric names
@@ -590,23 +629,46 @@ export class CloudflareMetricsClient {
 			type: "gauge",
 			values: [],
 		};
+		const requestsByLabels = new Map<string, MetricValue>();
+		const errorsByLabels = new Map<string, MetricValue>();
+		const cpuTimeByLabels = new Map<string, MetricValue>();
+		const durationByLabels = new Map<string, MetricValue>();
+		const workerRowsByLabels = new Map<
+			string,
+			{ labels: Record<string, string>; count: number }
+		>();
 
 		for (const accountData of result.data?.viewer?.accounts ?? []) {
 			for (const worker of accountData.workersInvocationsAdaptive ?? []) {
 				const scriptName = worker.dimensions?.scriptName ?? "unknown";
+				const status = worker.dimensions?.status ?? "unknown";
 				const baseLabels = {
 					script_name: scriptName,
 					account: normalizedAccount,
+					status,
 				};
+				const rowSignature = workerMetricSignature(baseLabels);
+				const existingRow = workerRowsByLabels.get(rowSignature);
 
-				requestsMetric.values.push({
-					labels: baseLabels,
-					value: worker.sum?.requests ?? 0,
-				});
-				errorsMetric.values.push({
-					labels: baseLabels,
-					value: worker.sum?.errors ?? 0,
-				});
+				if (existingRow) {
+					existingRow.count++;
+				} else {
+					workerRowsByLabels.set(rowSignature, {
+						labels: baseLabels,
+						count: 1,
+					});
+				}
+
+				aggregateWorkerCounterValue(
+					requestsByLabels,
+					baseLabels,
+					worker.sum?.requests ?? 0,
+				);
+				aggregateWorkerCounterValue(
+					errorsByLabels,
+					baseLabels,
+					worker.sum?.errors ?? 0,
+				);
 
 				const quantiles = worker.quantiles;
 				if (quantiles) {
@@ -618,10 +680,11 @@ export class CloudflareMetricsClient {
 					]) {
 						if (val != null) {
 							// Convert microseconds to seconds
-							cpuTimeMetric.values.push({
-								labels: { ...baseLabels, quantile: q },
-								value: val / 1_000_000,
-							});
+							aggregateWorkerGaugeValue(
+								cpuTimeByLabels,
+								{ ...baseLabels, quantile: q },
+								val / 1_000_000,
+							);
 						}
 					}
 					for (const { q, val } of [
@@ -632,15 +695,38 @@ export class CloudflareMetricsClient {
 					]) {
 						if (val != null) {
 							// Convert milliseconds to seconds
-							durationMetric.values.push({
-								labels: { ...baseLabels, quantile: q },
-								value: val / 1000,
-							});
+							aggregateWorkerGaugeValue(
+								durationByLabels,
+								{ ...baseLabels, quantile: q },
+								val / 1000,
+							);
 						}
 					}
 				}
 			}
 		}
+
+		const duplicateWorkerGroups = [...workerRowsByLabels.values()].filter(
+			(group) => group.count > 1,
+		);
+		if (duplicateWorkerGroups.length > 0) {
+			this.logger.warn("Worker totals returned duplicate grouped rows", {
+				account_id: accountId,
+				duplicate_groups: duplicateWorkerGroups.length,
+				duplicate_rows: duplicateWorkerGroups.reduce(
+					(total, group) => total + group.count - 1,
+					0,
+				),
+				examples: duplicateWorkerGroups
+					.slice(0, 5)
+					.map((group) => ({ ...group.labels, occurrences: group.count })),
+			});
+		}
+
+		requestsMetric.values = [...requestsByLabels.values()];
+		errorsMetric.values = [...errorsByLabels.values()];
+		cpuTimeMetric.values = [...cpuTimeByLabels.values()];
+		durationMetric.values = [...durationByLabels.values()];
 
 		if (requestsMetric.values.length > 0) metrics.push(requestsMetric);
 		if (errorsMetric.values.length > 0) metrics.push(errorsMetric);
