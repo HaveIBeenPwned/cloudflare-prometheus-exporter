@@ -121,7 +121,7 @@ export class AccountMetricCoordinator extends DurableObject<Env> {
 	 * @returns Initialized coordinator stub.
 	 */
 	static async get(accountId: string, accountName: string, env: Env) {
-		const stub = env.AccountMetricCoordinator.getByName(`account:${accountId}`);
+		const stub = env.AccountMetricCoordinator.getByName(`account:v2:${accountId}`);
 		await stub.initialize(accountId, accountName);
 		return stub;
 	}
@@ -268,7 +268,7 @@ export class AccountMetricCoordinator extends DurableObject<Env> {
 			...accountQueries.map(async (query) => {
 				try {
 					const exporter = await MetricExporter.get(
-						`account:${state.accountId}:${query}`,
+						`account:v2:${state.accountId}:${query}`,
 						this.env,
 					);
 					await exporter.updateZoneContext(
@@ -293,7 +293,7 @@ export class AccountMetricCoordinator extends DurableObject<Env> {
 						ZONE_SCOPED_QUERIES.map(async (query) => {
 							try {
 								const exporter = await MetricExporter.get(
-									`zone:${zone.id}:${query}`,
+									`zone:v2:${zone.id}:${query}`,
 									this.env,
 								);
 								await exporter.initializeZone(
@@ -366,7 +366,7 @@ export class AccountMetricCoordinator extends DurableObject<Env> {
 			accountQueries.map(async (query) => {
 				try {
 					const exporter = await MetricExporter.get(
-						`account:${state.accountId}:${query}`,
+						`account:v2:${state.accountId}:${query}`,
 						this.env,
 					);
 					return await exporter.export();
@@ -389,7 +389,7 @@ export class AccountMetricCoordinator extends DurableObject<Env> {
 						ZONE_SCOPED_QUERIES.map(async (query) => {
 							try {
 								const exporter = await MetricExporter.get(
-									`zone:${zone.id}:${query}`,
+									`zone:v2:${zone.id}:${query}`,
 									this.env,
 								);
 								return await exporter.export();
