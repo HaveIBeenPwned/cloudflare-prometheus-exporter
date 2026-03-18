@@ -30,8 +30,8 @@ export class MetricCoordinator extends DurableObject<Env> {
 	 * @returns Initialized MetricCoordinator stub.
 	 */
 	static async get(env: Env) {
-		const stub = env.MetricCoordinator.getByName("metric-coordinator-v2");
-		await stub.setIdentifier("metric-coordinator-v2");
+		const stub = env.MetricCoordinator.getByName("metric-coordinator");
+		await stub.setIdentifier("metric-coordinator");
 		return stub;
 	}
 
