@@ -9,6 +9,12 @@ export const MetricQueryNameSchema = z.enum([
 	"worker-totals",
 	"logpush-account",
 	"magic-transit",
+	"magic-transit-slo",
+	"magic-transit-traffic",
+	"magic-firewall-samples",
+	"network-analytics",
+	"stream-video-playback",
+	"stream-live-inputs",
 	// Zone-level
 	"http-metrics",
 	"adaptive-metrics",
@@ -21,6 +27,7 @@ export const MetricQueryNameSchema = z.enum([
 	"logpush-zone",
 	"origin-status-metrics",
 	"cache-miss-metrics",
+	"hostname-http-metrics",
 	// REST API
 	"ssl-certificates",
 	"lb-weight-metrics",
@@ -38,6 +45,12 @@ export const ACCOUNT_LEVEL_QUERIES = [
 	"worker-totals",
 	"logpush-account",
 	"magic-transit",
+	"magic-transit-slo",
+	"magic-transit-traffic",
+	"magic-firewall-samples",
+	"network-analytics",
+	"stream-video-playback",
+	"stream-live-inputs",
 ] as const;
 
 /**
@@ -60,6 +73,7 @@ export const ZONE_LEVEL_QUERIES = [
 	"logpush-zone",
 	"origin-status-metrics",
 	"cache-miss-metrics",
+	"hostname-http-metrics",
 	"ssl-certificates",
 	"lb-weight-metrics",
 ] as const;
@@ -91,11 +105,17 @@ export function isZoneLevelQuery(query: string): query is ZoneLevelQuery {
 
 /**
  * Query types available on free tier accounts.
+ * Note: Stream queries (stream-video-playback, stream-live-inputs) are
+ * intentionally excluded — Cloudflare Stream is a paid product.
  */
 export const FREE_TIER_QUERIES = [
 	"worker-totals",
 	"logpush-account",
 	"magic-transit",
+	"magic-transit-slo",
+	"magic-transit-traffic",
+	"magic-firewall-samples",
+	"network-analytics",
 ] as const;
 
 /**
@@ -119,6 +139,7 @@ export const PAID_TIER_GRAPHQL_QUERIES = [
 	"logpush-zone",
 	"origin-status-metrics",
 	"cache-miss-metrics",
+	"hostname-http-metrics",
 ] as const;
 
 /**

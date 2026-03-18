@@ -8,11 +8,11 @@ Export Cloudflare metrics to Prometheus. Built on Cloudflare Workers with Durabl
 
 ## Features
 
-- **58 Prometheus metrics** - requests, bandwidth, threats, workers, load balancers, SSL certs, and more
+- **90+ Prometheus metrics** - requests, bandwidth, threats, workers, load balancers, SSL certs, hostname-level analytics, network analytics, Magic Transit tunnel health/traffic/SLO, Magic Firewall per-rule visibility, stream video/live, and more
 - **Cloudflare Workers** - serverless edge deployment
 - **Durable Objects** - stateful counter accumulation for proper Prometheus semantics
 - **Background refresh** - alarms fetch data every 60s; scrapes return cached data instantly
-- **Rate limiting** - 40 req/10s with exponential backoff
+- **Rate limiting** - 200 req/10s with exponential backoff
 - **Multi-account** - automatically discovers and exports all accessible accounts/zones
 - **Runtime config API** - change settings without redeployment via REST endpoints
 - **Configurable** - zone filtering, metric denylist, label exclusion, custom metrics path, and more
@@ -62,6 +62,7 @@ Set in `wrangler.jsonc` or via `wrangler secret put`:
 | `CF_ACCOUNTS` | - | Comma-separated account IDs to include (default: all) |
 | `CF_ZONES` | - | Comma-separated zone IDs to include (default: all) |
 | `CF_FREE_TIER_ACCOUNTS` | - | Comma-separated account IDs using free tier (skips paid-tier metrics) |
+| `HOST_METRICS_ALLOWLIST` | - | Comma-separated hostnames for hostname-level metrics (max 50). Empty disables. Adds 2 extra GraphQL calls per account per refresh cycle. `EXCLUDE_HOST=true` also disables. |
 | `METRICS_PATH` | /metrics | Custom path for metrics endpoint |
 | `BASIC_AUTH_USER` | - | Username for basic auth (secret, default: no auth, requires `BASIC_AUTH_PASSWORD`) |
 | `BASIC_AUTH_PASSWORD` | - | Password for basic auth (secret, default: no auth, requires `BASIC_AUTH_USER`) |
@@ -154,6 +155,7 @@ Override configuration at runtime without redeployment. Overrides persist in KV 
 | `metricsDenylist` | string | Comma-separated metrics to exclude |
 | `excludeHost` | boolean | Exclude host labels |
 | `httpStatusGroup` | boolean | Group HTTP status codes |
+| `hostMetricsAllowlist` | string | Comma-separated hostnames for hostname-level metrics |
 
 ### Examples
 
@@ -307,12 +309,124 @@ curl -X DELETE https://your-worker.workers.dev/config
 
 ### Magic Transit Metrics
 
+**Tunnel Health** (from `magic-transit` query)
+
 | Metric | Type | Labels |
 |--------|------|--------|
-| `cloudflare_magic_transit_active_tunnels` | gauge | account |
-| `cloudflare_magic_transit_healthy_tunnels` | gauge | account |
-| `cloudflare_magic_transit_tunnel_failures` | gauge | account |
-| `cloudflare_magic_transit_edge_colo_count` | gauge | account |
+| `cloudflare_magic_transit_active_tunnels` | gauge | account, tunnel_name, site_name |
+| `cloudflare_magic_transit_healthy_tunnels` | gauge | account, tunnel_name, site_name |
+| `cloudflare_magic_transit_tunnel_failures` | gauge | account, tunnel_name, site_name |
+| `cloudflare_magic_transit_edge_colo_count` | gauge | account, tunnel_name, site_name |
+| `cloudflare_magic_transit_tunnel_failure_by_status` | gauge | account, tunnel_name, site_name, result_status |
+| `cloudflare_magic_transit_tunnel_state_healthy` | gauge | account, tunnel_name, site_name |
+| `cloudflare_magic_transit_tunnel_state_degraded` | gauge | account, tunnel_name, site_name |
+| `cloudflare_magic_transit_tunnel_state_down` | gauge | account, tunnel_name, site_name |
+
+> Tunnel state gauges follow the StateSet pattern: exactly one of `_healthy`, `_degraded`, `_down` is 1 per tunnel, the others are 0. Derived from Cloudflare health check scores (weighted average thresholded at 0.75/0.25).
+
+**Tunnel SLO** (from `magic-transit-slo` query)
+
+| Metric | Type | Labels |
+|--------|------|--------|
+| `cloudflare_magic_transit_tunnel_slo_status` | gauge | account, tunnel_name, site_name, status |
+| `cloudflare_magic_transit_tunnel_effective_slo` | gauge | account, tunnel_name, site_name |
+| `cloudflare_magic_transit_tunnel_target_slo` | gauge | account, tunnel_name, site_name |
+
+**Tunnel Traffic** (from `magic-transit-traffic` query)
+
+Per-tunnel bandwidth and packet counters with ramp method visibility.
+
+| Metric | Type | Labels |
+|--------|------|--------|
+| `cloudflare_magic_transit_tunnel_traffic_bits_total` | counter | account, tunnel_name, direction, on_ramp, off_ramp |
+| `cloudflare_magic_transit_tunnel_traffic_packets_total` | counter | account, tunnel_name, direction, on_ramp, off_ramp |
+
+### Magic Firewall Metrics
+
+**Per-Rule Sampled Traffic** (from `magic-firewall-samples` query)
+
+Traffic allowed and blocked by specific Magic Firewall rules.
+
+| Metric | Type | Labels |
+|--------|------|--------|
+| `cloudflare_magic_firewall_rule_bits_total` | counter | account, rule_id |
+| `cloudflare_magic_firewall_rule_packets_total` | counter | account, rule_id |
+
+### Network Analytics Metrics
+
+Traffic volume metrics across Cloudflare's Network Analytics v2 datasets. All are account-level counters with low-cardinality labels. Datasets that don't apply to an account (e.g. no Magic Transit subscription) return no data.
+
+**Magic Transit**
+
+| Metric | Type | Labels |
+|--------|------|--------|
+| `cloudflare_network_analytics_magic_transit_bits_total` | counter | account, outcome, direction, ip_protocol, mitigation_system |
+| `cloudflare_network_analytics_magic_transit_packets_total` | counter | account, outcome, direction, ip_protocol, mitigation_system |
+
+**Magic Firewall**
+
+| Metric | Type | Labels |
+|--------|------|--------|
+| `cloudflare_network_analytics_magic_firewall_bits_total` | counter | account, outcome, direction, ip_protocol |
+| `cloudflare_network_analytics_magic_firewall_packets_total` | counter | account, outcome, direction, ip_protocol |
+
+**DDoS Defense (dosd)**
+
+| Metric | Type | Labels |
+|--------|------|--------|
+| `cloudflare_network_analytics_dosd_bits_total` | counter | account, outcome, direction, ip_protocol, attack_vector |
+| `cloudflare_network_analytics_dosd_packets_total` | counter | account, outcome, direction, ip_protocol, attack_vector |
+
+**Intrusion Detection (IDPS)**
+
+| Metric | Type | Labels |
+|--------|------|--------|
+| `cloudflare_network_analytics_idps_bits_total` | counter | account, outcome, direction, ip_protocol |
+| `cloudflare_network_analytics_idps_packets_total` | counter | account, outcome, direction, ip_protocol |
+
+**Advanced TCP Protection**
+
+| Metric | Type | Labels |
+|--------|------|--------|
+| `cloudflare_network_analytics_tcp_protection_bits_total` | counter | account, outcome, direction, ip_protocol |
+| `cloudflare_network_analytics_tcp_protection_packets_total` | counter | account, outcome, direction, ip_protocol |
+
+**Advanced DNS Protection**
+
+| Metric | Type | Labels |
+|--------|------|--------|
+| `cloudflare_network_analytics_dns_protection_bits_total` | counter | account, outcome, direction, ip_protocol |
+| `cloudflare_network_analytics_dns_protection_packets_total` | counter | account, outcome, direction, ip_protocol |
+
+### Stream Video Playback Metrics
+
+| Metric | Type | Labels |
+|--------|------|--------|
+| `cloudflare_stream_video_playback_count_total` | counter | account, country, media_type |
+| `cloudflare_stream_video_playback_time_viewed_seconds_total` | counter | account, country, media_type |
+
+### Stream Live Input Metrics
+
+| Metric | Type | Labels |
+|--------|------|--------|
+| `cloudflare_stream_live_input_segments_total` | counter | account, event_code |
+| `cloudflare_stream_live_input_bit_rate_bps` | gauge | account, event_code |
+| `cloudflare_stream_live_input_gop_duration_seconds` | gauge | account, event_code |
+| `cloudflare_stream_live_input_upload_duration_ratio` | gauge | account, event_code |
+
+### Hostname Metrics
+
+Requires `HOST_METRICS_ALLOWLIST` to be set (max 50 hostnames). Disabled when `EXCLUDE_HOST=true`.
+
+All hostname metrics are **gauge snapshots** over the lookback window (1h or 2h), not cumulative counters. The `window` label indicates the lookback period. Hosts with zero traffic in a window will not emit series for that window.
+
+| Metric | Type | Labels | Description |
+|--------|------|--------|-------------|
+| `cloudflare_zone_hostname_requests` | gauge | zone, host, window | Total requests in lookback window |
+| `cloudflare_zone_hostname_requests_by_status` | gauge | zone, host, status, window | Requests by HTTP status code (raw, e.g. 200/404/500) |
+| `cloudflare_zone_hostname_cache_status` | gauge | zone, host, cache_status, window | Requests by cache status (hit/miss/etc.) |
+| `cloudflare_zone_hostname_edge_ttfb_seconds` | gauge | zone, host, quantile, window | Edge TTFB in seconds (P50/P95 quantiles) |
+| `cloudflare_zone_hostname_origin_response_duration_seconds` | gauge | zone, host, quantile, window | Origin response duration in seconds (P50/P95 quantiles) |
 
 ### SSL Certificate Metrics
 
@@ -396,23 +510,26 @@ For mixed accounts (enterprise + free zones), only free zones are skipped—paid
 │   ▼            ▼      ▼            ▼      ▼            ▼                       │
 │ ┌─────┐    ┌─────┐  ┌─────┐    ┌─────┐  ┌─────┐    ┌─────┐                     │
 │ │Exprt│    │Exprt│  │Exprt│    │Exprt│  │Exprt│    │Exprt│                     │
-│ │(13) │ .. │(N)  │  │(13) │ .. │(N)  │  │(13) │ .. │(N)  │                     │
+│ │(21) │ .. │(N)  │  │(21) │ .. │(N)  │  │(21) │ .. │(N)  │                     │
 │ │acct │    │zone │  │acct │    │zone │  │acct │    │zone │                     │
 │ └─────┘    └─────┘  └─────┘    └─────┘  └─────┘    └─────┘                     │
 │                                                                                │
 │  MetricExporter DOs (per account):                                             │
-│  - Account-scoped (13): worker-totals, logpush-account, magic-transit,         │
-│    http-metrics, adaptive-metrics, edge-country-metrics, colo-metrics,         │
-│    colo-error-metrics, request-method-metrics, health-check-metrics,           │
-│    load-balancer-metrics, logpush-zone, origin-status-metrics                  │
-│  - Zone-scoped (N per account, 1 per zone): ssl-certificates                   │
+│  - Account-scoped (21): worker-totals, logpush-account, magic-transit,         │
+│    magic-transit-slo, magic-transit-traffic, magic-firewall-samples,           │
+│    network-analytics, stream-video-playback, stream-live-inputs,              │
+│    http-metrics, adaptive-metrics, edge-country-metrics,                      │
+│    colo-metrics, colo-error-metrics, request-method-metrics,                   │
+│    health-check-metrics, load-balancer-metrics, logpush-zone,                  │
+│    origin-status-metrics, cache-miss-metrics, hostname-http-metrics            │
+│  - Zone-scoped (N per account, 1 per zone): ssl-certificates, lb-weight-metrics │
 │                                                                                │
 │  ┌─────────────────────────────────────────────────────────────────────────┐   │
 │  │              CloudflareMetricsClient (per-isolate)                      │   │
 │  │  - urql Client (GraphQL)                                                │   │
 │  │  - Cloudflare SDK (REST)                                                │   │
 │  │  - DataLoader: firewallRulesLoader (batches Promise.all calls)          │   │
-│  │  - Global Rate limiter: 40 req/10s with exponential backoff             │   │
+│  │  - Global Rate limiter: 200 req/10s with exponential backoff            │   │
 │  └─────────────────────────────────────────────────────────────────────────┘   │
 └────────────────────────────────────────────────────────────────────────────────┘
 ```
@@ -452,7 +569,7 @@ For mixed accounts (enterprise + free zones), only free zones are skipped—paid
   ▼           ▼         ▼           ▼         ▼           ▼
 ┌─────┐   ┌─────┐    ┌─────┐   ┌─────┐    ┌─────┐   ┌─────┐
 │Exprt│...│Exprt│    │Exprt│...│Exprt│    │Exprt│...│Exprt│
-│13+N │   │     │    │13+N │   │     │    │13+N │   │     │
+│21+N │   │     │    │21+N │   │     │    │21+N │   │     │
 │     │   │     │    │     │   │     │    │     │   │     │
 │ ret │   │ ret │    │ ret │   │ ret │    │ ret │   │ ret │
 │cache│   │cache│    │cache│   │cache│    │cache│   │cache│
@@ -513,7 +630,7 @@ For mixed accounts (enterprise + free zones), only free zones are skipped—paid
 │                                                                        │
 │  3. Push context to MetricExporter DOs:                                │
 │     ┌────────────────────────────────────────────────────────────────┐ │
-│     │ Account-scoped (13 exporters):                                 │ │
+│     │ Account-scoped (21 exporters):                                 │ │
 │     │   exporter.updateZoneContext(accountId, accountName, zones)    │ │
 │     │                                                                │ │
 │     │ Zone-scoped (N exporters, 1 per zone):                         │ │
@@ -530,13 +647,19 @@ For mixed accounts (enterprise + free zones), only free zones are skipped—paid
 ┌────────────────────────────────────────────────────────────────────────┐
 │           MetricExporter.refresh() for account-scoped queries          │
 │                                                                        │
-│  Query Types (13 total):                                               │
-│  ├── ACCOUNT-LEVEL (single account per query, 3):                      │
+│  Query Types (21 total):                                               │
+│  ├── ACCOUNT-LEVEL (single account per query, 9):                      │
 │  │   ├── worker-totals                                                 │
 │  │   ├── logpush-account                                               │
-│  │   └── magic-transit                                                 │
+│  │   ├── magic-transit                                                 │
+│  │   ├── magic-transit-slo                                             │
+│  │   ├── magic-transit-traffic                                         │
+│  │   ├── magic-firewall-samples                                        │
+│  │   ├── network-analytics                                             │
+│  │   ├── stream-video-playback                                         │
+│  │   └── stream-live-inputs                                            │
 │  │                                                                     │
-│  └── ZONE-LEVEL (all zones batched in one query, 10):                  │
+│  └── ZONE-LEVEL (all zones batched in one query, 12):                  │
 │      ├── http-metrics                                                  │
 │      ├── adaptive-metrics                                              │
 │      ├── edge-country-metrics                                          │
@@ -546,7 +669,9 @@ For mixed accounts (enterprise + free zones), only free zones are skipped—paid
 │      ├── health-check-metrics                                          │
 │      ├── load-balancer-metrics                                         │
 │      ├── logpush-zone                                                  │
-│      └── origin-status-metrics                                         │
+│      ├── origin-status-metrics                                         │
+│      ├── cache-miss-metrics                                            │
+│      └── hostname-http-metrics                                         │
 │                                                                        │
 │  After fetch: Process counters → Cache metrics → Schedule next alarm   │
 │  Jitter: 1-5s fixed (tighter clustering for time range alignment)      │

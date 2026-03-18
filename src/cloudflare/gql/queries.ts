@@ -536,6 +536,9 @@ export const MagicTransitMetricsQuery = graphql(`
           filter: { datetime_geq: $mintime, datetime_lt: $maxtime }
         ) {
           count
+          avg {
+            tunnelState
+          }
           dimensions {
             active
             datetime
@@ -555,6 +558,90 @@ export const MagicTransitMetricsQuery = graphql(`
 
 // Note: Cloudflare's accounts filter only supports single accountTag, not accountTag_in
 // Use MagicTransitMetricsQuery for individual account queries
+
+export const MagicTransitSLOMetricsQuery = graphql(`
+  query MagicTransitSLOMetrics(
+    $accountID: string!
+    $limit: uint64!
+    $mintime: Time!
+    $maxtime: Time!
+  ) {
+    viewer {
+      accounts(filter: { accountTag: $accountID }) {
+        magicTransitTunnelHealthCheckSLOsAdaptiveGroups(
+          limit: $limit
+          filter: { datetime_geq: $mintime, datetime_lt: $maxtime }
+        ) {
+          count
+          avg {
+            effectiveSlo
+            slo
+          }
+          dimensions {
+            tunnelName
+            siteName
+            status
+          }
+        }
+      }
+    }
+  }
+`);
+
+export const MagicTransitTunnelTrafficQuery = graphql(`
+  query MagicTransitTunnelTraffic(
+    $accountID: string!
+    $limit: uint64!
+    $mintime: Time!
+    $maxtime: Time!
+  ) {
+    viewer {
+      accounts(filter: { accountTag: $accountID }) {
+        magicTransitTunnelTrafficAdaptiveGroups(
+          limit: $limit
+          filter: { datetime_geq: $mintime, datetime_lt: $maxtime }
+        ) {
+          sum {
+            bits
+            packets
+          }
+          dimensions {
+            tunnelName
+            direction
+            onRamp
+            offRamp
+          }
+        }
+      }
+    }
+  }
+`);
+
+export const MagicFirewallSamplesQuery = graphql(`
+  query MagicFirewallSamples(
+    $accountID: string!
+    $limit: uint64!
+    $mintime: Time!
+    $maxtime: Time!
+  ) {
+    viewer {
+      accounts(filter: { accountTag: $accountID }) {
+        magicFirewallSamplesAdaptiveGroups(
+          limit: $limit
+          filter: { datetime_geq: $mintime, datetime_lt: $maxtime }
+        ) {
+          sum {
+            bits
+            packets
+          }
+          dimensions {
+            ruleId
+          }
+        }
+      }
+    }
+  }
+`);
 
 export const RequestMethodMetricsQuery = graphql(`
   query RequestMethodMetrics(
@@ -606,6 +693,85 @@ export const OriginStatusMetricsQuery = graphql(`
   }
 `);
 
+export const HostnameHttpMetricsQuery = graphql(`
+  query HostnameHttpMetrics(
+    $zoneIDs: [string!]
+    $mintime: Time!
+    $maxtime: Time!
+    $limit: uint64!
+    $hosts: [string!]
+  ) {
+    viewer {
+      zones(filter: { zoneTag_in: $zoneIDs }) {
+        zoneTag
+
+        hostRequests: httpRequestsAdaptiveGroups(
+          limit: $limit
+          filter: {
+            datetime_geq: $mintime
+            datetime_lt: $maxtime
+            clientRequestHTTPHost_in: $hosts
+          }
+        ) {
+          count
+          dimensions {
+            clientRequestHTTPHost
+          }
+        }
+
+        hostStatus: httpRequestsAdaptiveGroups(
+          limit: $limit
+          filter: {
+            datetime_geq: $mintime
+            datetime_lt: $maxtime
+            clientRequestHTTPHost_in: $hosts
+          }
+        ) {
+          count
+          dimensions {
+            clientRequestHTTPHost
+            edgeResponseStatus
+          }
+        }
+
+        hostCache: httpRequestsAdaptiveGroups(
+          limit: $limit
+          filter: {
+            datetime_geq: $mintime
+            datetime_lt: $maxtime
+            clientRequestHTTPHost_in: $hosts
+          }
+        ) {
+          count
+          dimensions {
+            clientRequestHTTPHost
+            cacheStatus
+          }
+        }
+
+        hostLatency: httpRequestsAdaptiveGroups(
+          limit: $limit
+          filter: {
+            datetime_geq: $mintime
+            datetime_lt: $maxtime
+            clientRequestHTTPHost_in: $hosts
+          }
+        ) {
+          dimensions {
+            clientRequestHTTPHost
+          }
+          quantiles {
+            edgeTimeToFirstByteMsP50
+            edgeTimeToFirstByteMsP95
+            originResponseDurationMsP50
+            originResponseDurationMsP95
+          }
+        }
+      }
+    }
+  }
+`);
+
 export const CacheMissMetricsQuery = graphql(`
   query CacheMissMetrics(
     $zoneIDs: [string!]
@@ -631,6 +797,176 @@ export const CacheMissMetricsQuery = graphql(`
           dimensions {
             clientCountryName
             clientRequestHTTPHost
+          }
+        }
+      }
+    }
+  }
+`);
+
+/**
+ * Combined network analytics query across all 6 NAv2 datasets.
+ * Returns bits/packets totals with low-cardinality dimensions.
+ * Datasets that don't apply to an account return empty arrays.
+ */
+export const NetworkAnalyticsQuery = graphql(`
+  query NetworkAnalytics(
+    $accountID: string!
+    $limit: uint64!
+    $mintime: Time!
+    $maxtime: Time!
+  ) {
+    viewer {
+      accounts(filter: { accountTag: $accountID }) {
+        magicTransitNetworkAnalyticsAdaptiveGroups(
+          limit: $limit
+          filter: { datetime_geq: $mintime, datetime_lt: $maxtime }
+        ) {
+          sum {
+            bits
+            packets
+          }
+          dimensions {
+            outcome
+            direction
+            ipProtocolName
+            mitigationSystem
+          }
+        }
+        magicFirewallNetworkAnalyticsAdaptiveGroups(
+          limit: $limit
+          filter: { datetime_geq: $mintime, datetime_lt: $maxtime }
+        ) {
+          sum {
+            bits
+            packets
+          }
+          dimensions {
+            outcome
+            direction
+            ipProtocolName
+          }
+        }
+        dosdNetworkAnalyticsAdaptiveGroups(
+          limit: $limit
+          filter: { datetime_geq: $mintime, datetime_lt: $maxtime }
+        ) {
+          sum {
+            bits
+            packets
+          }
+          dimensions {
+            outcome
+            direction
+            ipProtocolName
+            attackVector
+          }
+        }
+        magicIDPSNetworkAnalyticsAdaptiveGroups(
+          limit: $limit
+          filter: { datetime_geq: $mintime, datetime_lt: $maxtime }
+        ) {
+          sum {
+            bits
+            packets
+          }
+          dimensions {
+            outcome
+            direction
+            ipProtocolName
+          }
+        }
+        advancedTcpProtectionNetworkAnalyticsAdaptiveGroups(
+          limit: $limit
+          filter: { datetime_geq: $mintime, datetime_lt: $maxtime }
+        ) {
+          sum {
+            bits
+            packets
+          }
+          dimensions {
+            outcome
+            direction
+            ipProtocolName
+          }
+        }
+        advancedDnsProtectionNetworkAnalyticsAdaptiveGroups(
+          limit: $limit
+          filter: { datetime_geq: $mintime, datetime_lt: $maxtime }
+        ) {
+          sum {
+            bits
+            packets
+          }
+          dimensions {
+            outcome
+            direction
+            ipProtocolName
+          }
+        }
+      }
+    }
+  }
+`);
+
+/**
+ * Cloudflare Stream video playback metrics.
+ * Groups minutes viewed by country and media type.
+ * uid and creator are intentionally omitted (high cardinality).
+ */
+export const StreamVideoPlaybackQuery = graphql(`
+  query StreamVideoPlayback(
+    $accountID: string!
+    $limit: uint64!
+    $mintime: Time!
+    $maxtime: Time!
+  ) {
+    viewer {
+      accounts(filter: { accountTag: $accountID }) {
+        streamMinutesViewedAdaptiveGroups(
+          limit: $limit
+          filter: { datetime_geq: $mintime, datetime_lt: $maxtime }
+        ) {
+          count
+          sum {
+            minutesViewed
+          }
+          dimensions {
+            clientCountryName
+            mediaType
+          }
+        }
+      }
+    }
+  }
+`);
+
+/**
+ * Cloudflare Stream live input (input stream) metrics.
+ * Groups segment counts and bit rate by event code.
+ * inputId is intentionally omitted (high cardinality).
+ */
+export const StreamLiveInputsQuery = graphql(`
+  query StreamLiveInputs(
+    $accountID: string!
+    $limit: uint64!
+    $mintime: Time!
+    $maxtime: Time!
+  ) {
+    viewer {
+      accounts(filter: { accountTag: $accountID }) {
+        liveInputEventsAdaptiveGroups(
+          limit: $limit
+          filter: { datetime_geq: $mintime, datetime_lt: $maxtime }
+        ) {
+          count
+          avg {
+            bitRate
+            gopDuration
+            uploadDurationRatio
+          }
+          dimensions {
+            eventCode
           }
         }
       }
